@@ -17,8 +17,12 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer()
-	keyValueServer := server.Server{}
-	keyvalue.RegisterKeyValueStoreServer(grpcServer, &keyValueServer)
+	keyValueServer, err := server.New()
+	if err != nil {
+		panic(err)
+	}
+	defer keyValueServer.Shutdown()
+	keyvalue.RegisterKeyValueStoreServer(grpcServer, keyValueServer)
 
 	reflection.Register(grpcServer)
 

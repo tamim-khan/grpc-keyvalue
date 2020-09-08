@@ -3,7 +3,7 @@
 PROTO_DIR=./protos
 
 test:
-	go test -race
+	go test -v
 
 build:
 	go build -o build/grpc-keyvalue

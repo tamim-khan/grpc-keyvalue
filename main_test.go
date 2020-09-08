@@ -18,8 +18,13 @@ var listener *bufconn.Listener
 func init() {
 	listener = bufconn.Listen(bufSize)
 	grpcServer := grpc.NewServer()
-	keyvalue.RegisterKeyValueStoreServer(grpcServer, &server.Server{})
+	keyValueServer, err := server.New()
+	if err != nil {
+		panic(err)
+	}
+	keyvalue.RegisterKeyValueStoreServer(grpcServer, keyValueServer)
 	go func() {
+		defer keyValueServer.Shutdown()
 		if err := grpcServer.Serve(listener); err != nil {
 			log.Fatalf("Server exited with error: %v", err)
 		}
@@ -30,7 +35,7 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 	return listener.Dial()
 }
 
-func TestGet(t *testing.T) {
+func TestSetGetDelete(t *testing.T) {
 	ctx := context.Background()
 	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithInsecure())
 	if err != nil {
@@ -38,28 +43,32 @@ func TestGet(t *testing.T) {
 	}
 	defer conn.Close()
 	client := keyvalue.NewKeyValueStoreClient(conn)
-	resp, err := client.Get(ctx, &keyvalue.GetRequest{Key: "kee"})
+
+	// Set
+	_, err = client.Set(ctx, &keyvalue.SetRequest{
+		Key:   "test_key",
+		Value: "test_value",
+	})
+	if err != nil {
+		t.Fatalf("Set failed: %v", err)
+	}
+
+	// Get
+	getResp, err := client.Get(ctx, &keyvalue.GetRequest{Key: "test_key"})
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
-	if resp.Value != "empty" {
-		t.Fatalf("Get failed: Expecting value = \"empty\", Got value = %v", resp.Value)
+	if getResp.Value != "test_value" {
+		t.Fatalf("Get failed: Expecting value = \"test_value\", Got value = %v", getResp.Value)
 	}
-}
 
-func TestDelete(t *testing.T) {
-	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithInsecure())
-	if err != nil {
-		t.Fatalf("Failed to dial bufnet: %v", err)
-	}
-	defer conn.Close()
-	client := keyvalue.NewKeyValueStoreClient(conn)
-	resp, err := client.Delete(ctx, &keyvalue.DeleteRequest{Key: "kee"})
+	// Delete
+	_, err = client.Delete(ctx, &keyvalue.DeleteRequest{Key: "test_key"})
 	if err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
-	if resp.Status != keyvalue.DeleteResponse_NOT_FOUND {
-		t.Fatalf("Get failed: Expecting status = \"NOT_FOUND\", Got status = %v", resp.Status)
+	_, err = client.Get(ctx, &keyvalue.GetRequest{Key: "test_key"})
+	if err == nil {
+		t.Fatalf("Key present after delete")
 	}
 }
