@@ -42,9 +42,24 @@ func TestGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
-	log.Printf("Response: %+v", resp)
-	// Test for output here.
 	if resp.Value != "empty" {
 		t.Fatalf("Get failed: Expecting value = \"empty\", Got value = %v", resp.Value)
+	}
+}
+
+func TestDelete(t *testing.T) {
+	ctx := context.Background()
+	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("Failed to dial bufnet: %v", err)
+	}
+	defer conn.Close()
+	client := keyvalue.NewKeyValueStoreClient(conn)
+	resp, err := client.Delete(ctx, &keyvalue.DeleteRequest{Key: "kee"})
+	if err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+	if resp.Status != keyvalue.DeleteResponse_NOT_FOUND {
+		t.Fatalf("Get failed: Expecting status = \"NOT_FOUND\", Got status = %v", resp.Status)
 	}
 }
